@@ -1,10 +1,12 @@
 package com.rishabh.attendanceapp.navigation
 
-import com.rishabh.attendanceapp.face.FaceMatcher
+import kotlinx.coroutines.flow.flowOf
 import android.widget.Toast
-import com.rishabh.attendanceapp.face.EmbeddingResult
-import com.rishabh.attendanceapp.face.FaceRecognitionHelper
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
@@ -12,10 +14,24 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.rishabh.attendanceapp.data.Attendance
+import com.rishabh.attendanceapp.data.AttendanceStorageHelper
 import com.rishabh.attendanceapp.data.DatabaseProvider
 import com.rishabh.attendanceapp.data.Staff
-import com.rishabh.attendanceapp.ui.*
+import com.rishabh.attendanceapp.face.EmbeddingResult
+import com.rishabh.attendanceapp.face.FaceMatcher
+import com.rishabh.attendanceapp.face.FaceRecognitionHelper
+import com.rishabh.attendanceapp.location.LocationHelper
+import com.rishabh.attendanceapp.location.LocationResult
+import com.rishabh.attendanceapp.ui.AddStaffScreen
+import com.rishabh.attendanceapp.ui.AdminDashboard
+import com.rishabh.attendanceapp.ui.AttendanceCameraScreen
+import com.rishabh.attendanceapp.ui.FaceEnrollmentScreen
+import com.rishabh.attendanceapp.ui.LoginScreen
+import com.rishabh.attendanceapp.ui.StaffDashboard
+import com.rishabh.attendanceapp.ui.StaffProfileScreen
 import kotlinx.coroutines.launch
+
 
 @Composable
 fun AppNavigation() {
@@ -30,20 +46,25 @@ fun AppNavigation() {
 
     val staffDao = database.staffDao()
 
+    val attendanceDao = database.attendanceDao()
+
     val staffList by staffDao
         .getAllStaff()
-        .collectAsStateWithLifecycle(initialValue = emptyList())
+        .collectAsStateWithLifecycle(
+            initialValue = emptyList()
+        )
 
     val coroutineScope = rememberCoroutineScope()
+
 
     NavHost(
         navController = navController,
         startDestination = "login"
     ) {
 
-        // ------------------------------------------------
+        // ============================================================
         // LOGIN
-        // ------------------------------------------------
+        // ============================================================
 
         composable("login") {
 
@@ -61,7 +82,9 @@ fun AppNavigation() {
 
                 onStaffLogin = { employeeId ->
 
-                    navController.navigate("staff/$employeeId") {
+                    navController.navigate(
+                        "staff/$employeeId"
+                    ) {
 
                         popUpTo("login") {
                             inclusive = true
@@ -72,9 +95,9 @@ fun AppNavigation() {
         }
 
 
-        // ------------------------------------------------
+        // ============================================================
         // ADMIN DASHBOARD
-        // ------------------------------------------------
+        // ============================================================
 
         composable("admin") {
 
@@ -83,10 +106,14 @@ fun AppNavigation() {
                 staffList = staffList,
 
                 onAddStaff = {
-                    navController.navigate("addStaff")
+
+                    navController.navigate(
+                        "addStaff"
+                    )
                 },
 
                 onStaffClick = { staff ->
+
                     navController.navigate(
                         "staffProfile/${staff.id}"
                     )
@@ -94,7 +121,10 @@ fun AppNavigation() {
 
                 onLogout = {
 
-                    navController.navigate("login") {
+                    navController.navigate(
+                        "login"
+                    ) {
+
                         popUpTo(0)
                     }
                 }
@@ -102,9 +132,9 @@ fun AppNavigation() {
         }
 
 
-        // ------------------------------------------------
+        // ============================================================
         // ADD STAFF
-        // ------------------------------------------------
+        // ============================================================
 
         composable("addStaff") {
 
@@ -115,7 +145,9 @@ fun AppNavigation() {
                     coroutineScope.launch {
 
                         val existingStaff =
-                            staffDao.getStaffByEmployeeId(employeeId)
+                            staffDao.getStaffByEmployeeId(
+                                employeeId
+                            )
 
                         if (existingStaff == null) {
 
@@ -132,31 +164,40 @@ fun AppNavigation() {
                 },
 
                 onBack = {
+
                     navController.popBackStack()
                 }
             )
         }
 
 
-        // ------------------------------------------------
+        // ============================================================
         // STAFF PROFILE
-        // ------------------------------------------------
+        // ============================================================
 
         composable(
             route = "staffProfile/{staffId}",
 
             arguments = listOf(
+
                 navArgument("staffId") {
+
                     type = NavType.IntType
                 }
             )
+
         ) { backStackEntry ->
 
             val staffId =
-                backStackEntry.arguments?.getInt("staffId")
+                backStackEntry.arguments
+                    ?.getInt("staffId")
 
             val staff =
-                staffList.find { it.id == staffId }
+                staffList.find {
+
+                    it.id == staffId
+                }
+
 
             if (staff != null) {
 
@@ -165,36 +206,48 @@ fun AppNavigation() {
                     staff = staff,
 
                     onEnrollFace = {
+
                         navController.navigate(
                             "faceEnrollment/${staff.id}"
                         )
                     },
 
                     onBack = {
+
                         navController.popBackStack()
                     }
                 )
             }
         }
-        // ------------------------------------------------
+
+
+        // ============================================================
         // FACE ENROLLMENT
-        // ------------------------------------------------
+        // ============================================================
 
         composable(
             route = "faceEnrollment/{staffId}",
 
             arguments = listOf(
+
                 navArgument("staffId") {
+
                     type = NavType.IntType
                 }
             )
+
         ) { backStackEntry ->
 
             val staffId =
-                backStackEntry.arguments?.getInt("staffId")
+                backStackEntry.arguments
+                    ?.getInt("staffId")
 
             val staff =
-                staffList.find { it.id == staffId }
+                staffList.find {
+
+                    it.id == staffId
+                }
+
 
             if (staff != null) {
 
@@ -204,55 +257,72 @@ fun AppNavigation() {
 
                     onPhotoCaptured = { photoFile ->
 
-                        FaceRecognitionHelper.generateEmbedding(
-                            context = context,
-                            photoFile = photoFile
-                        ) { result ->
+                        FaceRecognitionHelper
+                            .generateEmbedding(
 
-                            when (result) {
+                                context = context,
 
-                                is EmbeddingResult.Success -> {
+                                photoFile = photoFile
 
-                                    val embeddingString =
-                                        result.embedding
-                                            .joinToString(",")
+                            ) { result ->
+
+                                when (result) {
 
 
-                                    coroutineScope.launch {
+                                    is EmbeddingResult.Success -> {
 
-                                        staffDao.updateStaff(
-                                            staff.copy(
-                                                faceEmbedding =
-                                                    embeddingString
+                                        val embeddingString =
+                                            result.embedding
+                                                .joinToString(",")
+
+
+                                        coroutineScope.launch {
+
+                                            staffDao.updateStaff(
+
+                                                staff.copy(
+
+                                                    faceEmbedding =
+                                                        embeddingString
+                                                )
                                             )
-                                        )
 
+
+                                            Toast.makeText(
+
+                                                context,
+
+                                                "Face enrolled successfully",
+
+                                                Toast.LENGTH_SHORT
+
+                                            ).show()
+
+
+                                            navController
+                                                .popBackStack()
+                                        }
+                                    }
+
+
+                                    is EmbeddingResult.Error -> {
 
                                         Toast.makeText(
+
                                             context,
-                                            "Face enrolled successfully",
-                                            Toast.LENGTH_SHORT
+
+                                            "Enrollment failed: ${result.message}",
+
+                                            Toast.LENGTH_LONG
+
                                         ).show()
-
-
-                                        navController.popBackStack()
                                     }
                                 }
-
-
-                                is EmbeddingResult.Error -> {
-
-                                    Toast.makeText(
-                                        context,
-                                        "Enrollment failed: ${result.message}",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                }
                             }
-                        }
                     },
 
                     onBack = {
+
                         navController.popBackStack()
                     }
                 )
@@ -260,9 +330,9 @@ fun AppNavigation() {
         }
 
 
-        // ------------------------------------------------
-        // STAFF DASHBOARD
-        // ------------------------------------------------
+        // ============================================================
+// STAFF DASHBOARD
+// ============================================================
 
         composable(
             route = "staff/{employeeId}",
@@ -272,6 +342,7 @@ fun AppNavigation() {
                     type = NavType.StringType
                 }
             )
+
         ) { backStackEntry ->
 
             val employeeId =
@@ -280,10 +351,8 @@ fun AppNavigation() {
                     ?.uppercase()
                     ?: ""
 
-
             val staff =
                 staffList.find {
-
                     it.employeeId.equals(
                         employeeId,
                         ignoreCase = true
@@ -291,11 +360,45 @@ fun AppNavigation() {
                 }
 
 
+            // --------------------------------------------------------
+            // GET LATEST ATTENDANCE FOR THIS STAFF MEMBER
+            // --------------------------------------------------------
+
+            val latestAttendanceFlow =
+                remember(staff?.id) {
+
+                    if (staff != null) {
+
+                        attendanceDao
+                            .getLatestAttendanceForStaff(
+                                staff.id
+                            )
+
+                    } else {
+
+                        flowOf<Attendance?>(null)
+                    }
+                }
+
+
+            val latestAttendance by
+            latestAttendanceFlow
+                .collectAsStateWithLifecycle(
+                    initialValue = null
+                )
+
+
+            // --------------------------------------------------------
+            // SHOW STAFF DASHBOARD
+            // --------------------------------------------------------
+
             StaffDashboard(
 
                 staff = staff,
 
                 employeeId = employeeId,
+
+                latestAttendance = latestAttendance,
 
                 onMarkAttendance = {
 
@@ -319,9 +422,9 @@ fun AppNavigation() {
             )
         }
 
-        // ------------------------------------------------
-// ATTENDANCE FACE VERIFICATION
-// ------------------------------------------------
+        // ============================================================
+        // ATTENDANCE CAMERA / FACE VERIFICATION
+        // ============================================================
 
         composable(
             route = "attendanceCamera/{staffId}",
@@ -329,6 +432,7 @@ fun AppNavigation() {
             arguments = listOf(
 
                 navArgument("staffId") {
+
                     type = NavType.IntType
                 }
             )
@@ -343,6 +447,7 @@ fun AppNavigation() {
 
             val staff =
                 staffList.find {
+
                     it.id == staffId
                 }
 
@@ -360,88 +465,268 @@ fun AppNavigation() {
                             staff.faceEmbedding
 
 
+                        // ------------------------------------------------
+                        // NO FACE ENROLLED
+                        // ------------------------------------------------
+
                         if (enrolledEmbedding == null) {
 
                             Toast.makeText(
+
                                 context,
+
                                 "No enrolled face found.",
+
                                 Toast.LENGTH_LONG
+
                             ).show()
+
 
                             photoFile.delete()
 
-                            return@AttendanceCameraScreen
-                        }
+
+                        } else {
 
 
-                        FaceRecognitionHelper
-                            .generateEmbedding(
+                            // ------------------------------------------------
+                            // GENERATE EMBEDDING FROM CURRENT SELFIE
+                            // ------------------------------------------------
 
-                                context = context,
+                            FaceRecognitionHelper
+                                .generateEmbedding(
 
-                                photoFile =
-                                    photoFile
+                                    context = context,
 
-                            ) { embeddingResult ->
+                                    photoFile = photoFile
 
-
-                                when (
-                                    embeddingResult
-                                ) {
+                                ) { embeddingResult ->
 
 
-                                    is EmbeddingResult.Success -> {
+                                    when (embeddingResult) {
 
 
-                                        val matchResult =
-                                            FaceMatcher.compare(
+                                        // ====================================================
+                                        // EMBEDDING SUCCESS
+                                        // ====================================================
 
-                                                enrolledEmbeddingString =
-                                                    enrolledEmbedding,
-
-                                                currentEmbedding =
-                                                    embeddingResult.embedding
-                                            )
+                                        is EmbeddingResult.Success -> {
 
 
-                                        val similarityPercent =
-                                            (
-                                                    matchResult.similarity *
-                                                            100
-                                                    ).toInt()
+                                            val matchResult =
+                                                FaceMatcher.compare(
+
+                                                    enrolledEmbeddingString =
+                                                        enrolledEmbedding,
+
+                                                    currentEmbedding =
+                                                        embeddingResult.embedding
+                                                )
 
 
-                                        if (
-                                            matchResult.isMatch
-                                        ) {
+                                            val similarityPercent =
+                                                (
+                                                        matchResult.similarity *
+                                                                100
+                                                        ).toInt()
+
+
+                                            // --------------------------------------------
+                                            // FACE MATCHED
+                                            // --------------------------------------------
+
+                                            if (matchResult.isMatch) {
+
+
+                                                LocationHelper
+                                                    .getCurrentLocation(
+
+                                                        context = context
+
+                                                    ) { locationResult ->
+
+
+                                                        when (locationResult) {
+
+
+                                                            // ========================================
+                                                            // LOCATION SUCCESS
+                                                            // ========================================
+
+                                                            is LocationResult.Success -> {
+
+
+                                                                val timestamp =
+                                                                    System.currentTimeMillis()
+
+
+                                                                coroutineScope.launch {
+
+
+                                                                    try {
+
+
+                                                                        // ------------------------------
+                                                                        // SAVE SELFIE PERMANENTLY
+                                                                        // ------------------------------
+
+                                                                        val permanentSelfie =
+                                                                            AttendanceStorageHelper
+                                                                                .saveSelfie(
+
+                                                                                    context =
+                                                                                        context,
+
+                                                                                    sourceFile =
+                                                                                        photoFile,
+
+                                                                                    employeeId =
+                                                                                        staff.employeeId,
+
+                                                                                    timestamp =
+                                                                                        timestamp
+                                                                                )
+
+
+                                                                        // ------------------------------
+                                                                        // SAVE ATTENDANCE TO ROOM
+                                                                        // ------------------------------
+
+                                                                        attendanceDao
+                                                                            .insertAttendance(
+
+                                                                                Attendance(
+
+                                                                                    staffId =
+                                                                                        staff.id,
+
+                                                                                    timestamp =
+                                                                                        timestamp,
+
+                                                                                    latitude =
+                                                                                        locationResult.latitude,
+
+                                                                                    longitude =
+                                                                                        locationResult.longitude,
+
+                                                                                    selfiePath =
+                                                                                        permanentSelfie.absolutePath
+                                                                                )
+                                                                            )
+
+
+                                                                        Toast.makeText(
+
+                                                                            context,
+
+                                                                            "Attendance marked successfully ($similarityPercent% face match)",
+
+                                                                            Toast.LENGTH_LONG
+
+                                                                        ).show()
+
+
+                                                                        navController
+                                                                            .popBackStack()
+
+
+                                                                    } catch (
+                                                                        exception: Exception
+                                                                    ) {
+
+
+                                                                        photoFile.delete()
+
+
+                                                                        Toast.makeText(
+
+                                                                            context,
+
+                                                                            "Unable to save attendance: ${exception.message}",
+
+                                                                            Toast.LENGTH_LONG
+
+                                                                        ).show()
+
+
+                                                                        navController
+                                                                            .popBackStack()
+                                                                    }
+                                                                }
+                                                            }
+
+
+                                                            // ========================================
+                                                            // LOCATION FAILED
+                                                            // ========================================
+
+                                                            is LocationResult.Error -> {
+
+
+                                                                photoFile.delete()
+
+
+                                                                Toast.makeText(
+
+                                                                    context,
+
+                                                                    "Attendance not recorded: ${locationResult.message}",
+
+                                                                    Toast.LENGTH_LONG
+
+                                                                ).show()
+
+
+                                                                navController
+                                                                    .popBackStack()
+                                                            }
+                                                        }
+                                                    }
+
+
+                                            } else {
+
+
+                                                // --------------------------------------------
+                                                // FACE DID NOT MATCH
+                                                // --------------------------------------------
+
+                                                Toast.makeText(
+
+                                                    context,
+
+                                                    "Face does not match enrolled employee ($similarityPercent% similarity)",
+
+                                                    Toast.LENGTH_LONG
+
+                                                ).show()
+
+
+                                                photoFile.delete()
+
+
+                                                navController
+                                                    .popBackStack()
+                                            }
+                                        }
+
+
+                                        // ====================================================
+                                        // EMBEDDING FAILED
+                                        // ====================================================
+
+                                        is EmbeddingResult.Error -> {
+
 
                                             Toast.makeText(
+
                                                 context,
-                                                "Face verified successfully ($similarityPercent% similarity)",
+
+                                                "Face verification failed: ${embeddingResult.message}",
+
                                                 Toast.LENGTH_LONG
+
                                             ).show()
 
-
-                                            // Keep the image for now.
-                                            // In the next phase we will
-                                            // permanently store it as
-                                            // the attendance selfie.
-
-
-                                            navController
-                                                .popBackStack()
-
-                                        } else {
-
-                                            Toast.makeText(
-                                                context,
-                                                "Face does not match enrolled employee ($similarityPercent% similarity)",
-                                                Toast.LENGTH_LONG
-                                            ).show()
-
-
-                                            // Rejected photos do not
-                                            // need to be retained.
 
                                             photoFile.delete()
 
@@ -450,22 +735,8 @@ fun AppNavigation() {
                                                 .popBackStack()
                                         }
                                     }
-
-
-                                    is EmbeddingResult.Error -> {
-
-
-                                        Toast.makeText(
-                                            context,
-                                            "Face verification failed: ${embeddingResult.message}",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-
-
-                                        photoFile.delete()
-                                    }
                                 }
-                            }
+                        }
                     },
 
 

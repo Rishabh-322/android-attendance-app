@@ -35,13 +35,40 @@ fun AttendanceCameraScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    var hasCameraPermission by remember {
+    fun cameraPermissionGranted(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+    }
 
-        mutableStateOf(
+    fun locationPermissionGranted(): Boolean {
+
+        val fine =
             ContextCompat.checkSelfPermission(
                 context,
-                Manifest.permission.CAMERA
+                Manifest.permission.ACCESS_FINE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
+
+        val coarse =
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+
+        return fine || coarse
+    }
+
+
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            cameraPermissionGranted()
+        )
+    }
+
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            locationPermissionGranted()
         )
     }
 
@@ -62,25 +89,60 @@ fun AttendanceCameraScreen(
 
     val permissionLauncher =
         rememberLauncherForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { granted ->
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) {
 
-            hasCameraPermission = granted
+            hasCameraPermission =
+                cameraPermissionGranted()
 
-            if (!granted) {
+            hasLocationPermission =
+                locationPermissionGranted()
+
+            if (!hasCameraPermission) {
 
                 statusMessage =
-                    "Camera permission is required to mark attendance."
+                    "Camera permission is required."
+
+            } else if (!hasLocationPermission) {
+
+                statusMessage =
+                    "Location permission is required to record attendance."
+
+            } else {
+
+                statusMessage =
+                    "Look directly at the camera to verify your identity."
             }
         }
 
 
     LaunchedEffect(Unit) {
 
-        if (!hasCameraPermission) {
+        val requiredPermissions =
+            mutableListOf<String>()
+
+        if (!cameraPermissionGranted()) {
+
+            requiredPermissions.add(
+                Manifest.permission.CAMERA
+            )
+        }
+
+        if (!locationPermissionGranted()) {
+
+            requiredPermissions.add(
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+
+            requiredPermissions.add(
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        }
+
+        if (requiredPermissions.isNotEmpty()) {
 
             permissionLauncher.launch(
-                Manifest.permission.CAMERA
+                requiredPermissions.toTypedArray()
             )
         }
     }
@@ -136,8 +198,7 @@ fun AttendanceCameraScreen(
                                 try {
 
                                     val cameraProvider =
-                                        cameraProviderFuture
-                                            .get()
+                                        cameraProviderFuture.get()
 
                                     val preview =
                                         Preview.Builder()
@@ -159,16 +220,14 @@ fun AttendanceCameraScreen(
                                         CameraSelector
                                             .DEFAULT_FRONT_CAMERA
 
-                                    cameraProvider
-                                        .unbindAll()
+                                    cameraProvider.unbindAll()
 
-                                    cameraProvider
-                                        .bindToLifecycle(
-                                            lifecycleOwner,
-                                            cameraSelector,
-                                            preview,
-                                            capture
-                                        )
+                                    cameraProvider.bindToLifecycle(
+                                        lifecycleOwner,
+                                        cameraSelector,
+                                        preview,
+                                        capture
+                                    )
 
                                 } catch (
                                     exception: Exception
@@ -179,8 +238,7 @@ fun AttendanceCameraScreen(
                                 }
 
                             },
-                                ContextCompat
-                                    .getMainExecutor(ctx)
+                                ContextCompat.getMainExecutor(ctx)
                             )
 
                         previewView
@@ -213,10 +271,25 @@ fun AttendanceCameraScreen(
             modifier = Modifier.height(16.dp)
         )
 
+
+        if (!hasLocationPermission) {
+
+            Text(
+                text = "Location permission is required before attendance can be recorded.",
+                color = MaterialTheme.colorScheme.error
+            )
+
+            Spacer(
+                modifier = Modifier.height(8.dp)
+            )
+        }
+
+
         Text(
             text = statusMessage,
             style = MaterialTheme.typography.bodyMedium
         )
+
 
         Spacer(
             modifier = Modifier.height(16.dp)
@@ -281,8 +354,7 @@ fun AttendanceCameraScreen(
 
                                 context = context,
 
-                                photoFile =
-                                    photoFile
+                                photoFile = photoFile
 
                             ) { result ->
 
@@ -356,6 +428,7 @@ fun AttendanceCameraScreen(
 
             enabled =
                 hasCameraPermission &&
+                        hasLocationPermission &&
                         !isCapturing,
 
             modifier =
@@ -378,12 +451,9 @@ fun AttendanceCameraScreen(
 
 
         OutlinedButton(
-
             onClick = onBack,
-
             modifier =
                 Modifier.fillMaxWidth()
-
         ) {
 
             Text("CANCEL")
