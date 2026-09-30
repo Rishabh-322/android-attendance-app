@@ -74,4 +74,6 @@ dependencies {
 
     // Read photo orientation correctly
     implementation("androidx.exifinterface:exifinterface:1.4.1")
+    // Location
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 }
