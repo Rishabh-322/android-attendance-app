@@ -197,6 +197,28 @@ fun AppNavigation() {
 
                     it.id == staffId
                 }
+            val attendanceFlow =
+                remember(staffId) {
+
+                    if (staffId != null) {
+
+                        attendanceDao
+                            .getAttendanceForStaff(
+                                staffId
+                            )
+
+                    } else {
+
+                        flowOf(emptyList())
+                    }
+                }
+
+
+            val attendanceList by
+            attendanceFlow
+                .collectAsStateWithLifecycle(
+                    initialValue = emptyList()
+                )
 
 
             if (staff != null) {
@@ -204,6 +226,9 @@ fun AppNavigation() {
                 StaffProfileScreen(
 
                     staff = staff,
+
+                    attendanceList =
+                        attendanceList,
 
                     onEnrollFace = {
 
@@ -214,7 +239,8 @@ fun AppNavigation() {
 
                     onBack = {
 
-                        navController.popBackStack()
+                        navController
+                            .popBackStack()
                     }
                 )
             }
